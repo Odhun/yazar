@@ -25,42 +25,27 @@ interface Props {
   onPageChange?: (current: number, total: number) => void;
 }
 
-const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
-  {
-    light: {
-      body: {
-        background: "#faf9f7 !important",
-        color: "#1c1917 !important",
-        "font-family": "Georgia, 'Times New Roman', serif",
-        "line-height": "1.9",
-        padding: "0 2rem",
-      },
-      p: { "margin-bottom": "1em" },
-      a: { color: "#7c3aed !important" },
-    },
-    dark: {
-      body: {
-        background: "#1c1917 !important",
-        color: "#fafaf9 !important",
-        "font-family": "Georgia, 'Times New Roman', serif",
-        "line-height": "1.9",
-        padding: "0 2rem",
-      },
-      p: { "margin-bottom": "1em" },
-      a: { color: "#a78bfa !important" },
-    },
-    sepia: {
-      body: {
-        background: "#f5f0e8 !important",
-        color: "#3c2415 !important",
-        "font-family": "Georgia, 'Times New Roman', serif",
-        "line-height": "1.9",
-        padding: "0 2rem",
-      },
-      p: { "margin-bottom": "1em" },
-      a: { color: "#8b5e3c !important" },
-    },
-  };
+// Renk değerleri — !important yok, buildCSS ekliyor
+const THEME_CSS: Record<ReaderTheme, string> = {
+  light: `
+    html, body { background: #faf9f7 !important; color: #1c1917 !important; }
+    body { font-family: Georgia, 'Times New Roman', serif !important; line-height: 1.9 !important; padding: 0 2rem !important; margin: 0 !important; }
+    p { margin-bottom: 1em; }
+    a { color: #7c3aed !important; }
+  `,
+  dark: `
+    html, body { background: #1c1917 !important; color: #fafaf9 !important; }
+    body { font-family: Georgia, 'Times New Roman', serif !important; line-height: 1.9 !important; padding: 0 2rem !important; margin: 0 !important; }
+    p { margin-bottom: 1em; }
+    a { color: #a78bfa !important; }
+  `,
+  sepia: `
+    html, body { background: #f5f0e8 !important; color: #3c2415 !important; }
+    body { font-family: Georgia, 'Times New Roman', serif !important; line-height: 1.9 !important; padding: 0 2rem !important; margin: 0 !important; }
+    p { margin-bottom: 1em; }
+    a { color: #8b5e3c !important; }
+  `,
+};
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: "#fde047",
@@ -68,6 +53,27 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
   blue: "#93c5fd",
   pink: "#f9a8d4",
 };
+
+function buildCSS(theme: ReaderTheme, fontSize: number): string {
+  return [
+    THEME_CSS[theme],
+    `body { font-size: ${fontSize}px !important; }`,
+    // Mobil metin seçimi için zorunlu
+    `* { -webkit-user-select: text !important; user-select: text !important; }`,
+    `img, video, svg { max-width: 100% !important; height: auto !important; }`,
+  ].join("\n");
+}
+
+// Sayfanın iframe'ine stil enjekte et / güncelle (id'ye göre)
+function injectStyle(doc: Document, id: string, css: string) {
+  let el = doc.getElementById(id) as HTMLStyleElement | null;
+  if (!el) {
+    el = doc.createElement("style");
+    el.id = id;
+    (doc.head ?? doc.documentElement).appendChild(el);
+  }
+  el.textContent = css;
+}
 
 export function EpubReader({
   epubUrl,
@@ -88,12 +94,17 @@ export function EpubReader({
   const bookRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renditionRef = useRef<any>(null);
+  // Ref'ler sayesinde useEffect closure'ları her zaman güncel değeri okur
+  const themeRef = useRef<ReaderTheme>(theme);
+  const fontSizeRef = useRef<number>(fontSize);
+  themeRef.current = theme;
+  fontSizeRef.current = fontSize;
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
 
-  // Konteyner boyutunu al — mobil dahil güvenilir
   const getDimensions = useCallback(() => {
     const el = wrapperRef.current;
     if (!el) return { w: window.innerWidth, h: window.innerHeight - 56 };
@@ -113,9 +124,7 @@ export function EpubReader({
         const ePub = (await import("epubjs")).default;
         if (!mounted) return;
 
-        // Boyutları net al — string '100%' yerine sayı geç
         const { w, h } = getDimensions();
-
         const book = ePub(epubUrl);
         bookRef.current = book;
 
@@ -126,68 +135,50 @@ export function EpubReader({
         });
         renditionRef.current = rendition;
 
-        // addHighlight fonksiyonunu dışarıya aç
+        // Dış API'leri aç
         if (addHighlightRef) {
           addHighlightRef.current = (cfi: string, color: string) => {
             renditionRef.current?.annotations.highlight(
-              cfi,
-              {},
-              undefined,
-              "hl",
+              cfi, {}, undefined, "hl",
               { fill: HIGHLIGHT_COLORS[color] ?? "#fde047", "fill-opacity": "0.35" }
             );
           };
         }
 
-        // Swipe (mobil sayfa geçişi) — iframe içine listener ekle
+        // Her sayfa yüklendiğinde: tema CSS + swipe listener
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         rendition.hooks.content.register((contents: any) => {
           if (!contents?.document) return;
+          const doc: Document = contents.document;
+          const win: Window = contents.window;
+
+          // Tek stil elementi — her tema/fontsize değişiminde textContent güncellenir
+          injectStyle(doc, "__ereader__", buildCSS(themeRef.current, fontSizeRef.current));
+
+          // Swipe: yatay > 50px ve seçim yoksa sayfa geç
           let startX = 0;
           let startY = 0;
-          contents.document.addEventListener(
-            "touchstart",
-            (e: TouchEvent) => {
-              startX = e.touches[0].clientX;
-              startY = e.touches[0].clientY;
-            },
-            { passive: true }
-          );
-          contents.document.addEventListener(
-            "touchend",
-            (e: TouchEvent) => {
-              const dx = e.changedTouches[0].clientX - startX;
-              const dy = e.changedTouches[0].clientY - startY;
-              const sel = (contents.window as Window)?.getSelection?.();
-              const hasSelection = sel && sel.toString().trim().length > 0;
-              if (
-                !hasSelection &&
-                Math.abs(dx) > 50 &&
-                Math.abs(dx) > Math.abs(dy)
-              ) {
-                if (dx > 0) renditionRef.current?.prev();
-                else renditionRef.current?.next();
-              }
-            },
-            { passive: true }
-          );
+          doc.addEventListener("touchstart", (e: TouchEvent) => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+          }, { passive: true });
+          doc.addEventListener("touchend", (e: TouchEvent) => {
+            const dx = e.changedTouches[0].clientX - startX;
+            const dy = e.changedTouches[0].clientY - startY;
+            const hasSel = win?.getSelection?.()?.toString().trim();
+            if (!hasSel && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+              if (dx > 0) renditionRef.current?.prev();
+              else renditionRef.current?.next();
+            }
+          }, { passive: true });
         });
-
-        // Temaları kaydet
-        (Object.keys(EPUB_THEMES) as ReaderTheme[]).forEach((t) => {
-          rendition.themes.register(t, EPUB_THEMES[t]);
-        });
-        rendition.themes.select(theme);
-        rendition.themes.fontSize(`${fontSize}px`);
 
         await rendition.display(initialCfi ?? undefined);
         await book.locations.generate(1024);
-
         if (!mounted) return;
         setLoading(false);
 
         const total = book.locations.length();
-        onPageChange?.(1, total);
 
         if (goToPageRef) {
           goToPageRef.current = (page: number) => {
@@ -202,96 +193,79 @@ export function EpubReader({
           };
         }
 
-        // Konum takibi
         rendition.on(
           "relocated",
-          (loc: {
-            start: { cfi: string; location: number };
-            atStart: boolean;
-            atEnd: boolean;
-          }) => {
+          (loc: { start: { cfi: string }; atStart: boolean; atEnd: boolean }) => {
             if (!mounted) return;
             const cfi = loc.start.cfi;
-            const pct = Math.round(
-              book.locations.percentageFromCfi(cfi) * 100
-            );
+            const pctRaw = book.locations.percentageFromCfi(cfi);
+            const pct = Math.round(pctRaw * 100);
             onProgress(cfi, Math.max(0, Math.min(100, pct)));
             setAtStart(loc.atStart);
             setAtEnd(loc.atEnd);
-            const total = book.locations.length();
-            onPageChange?.(loc.start.location + 1, total);
+            // Percentage ile sayfa hesapla — loc.start.location güvensiz
+            const t = book.locations.length();
+            const currentPage = t > 0
+              ? Math.max(1, Math.min(t, Math.ceil(pctRaw * t) || 1))
+              : 1;
+            onPageChange?.(currentPage, t);
           }
         );
 
-        // Metin seçimi
+        onPageChange?.(1, total);
+
         rendition.on(
           "selected",
-          (
-            cfiRange: string,
-            contents: { window: Window; document: Document }
-          ) => {
+          (cfiRange: string, contents: { window: Window; document: Document }) => {
             if (!mounted) return;
             const sel = contents.window.getSelection();
             if (!sel || sel.rangeCount === 0) return;
             const text = sel.toString().trim();
             if (!text) return;
 
-            const iframe = (
-              contents.document.defaultView as Window | null
-            )?.frameElement as HTMLIFrameElement | null;
-
-            // iframe bulunamazsa containerRef ile fallback
-            const iRect =
-              iframe?.getBoundingClientRect() ??
-              containerRef.current?.getBoundingClientRect() ??
-              { left: 0, top: 0 };
+            const iframe = contents.document.defaultView?.frameElement as HTMLIFrameElement | null;
+            const iRect = iframe?.getBoundingClientRect()
+              ?? containerRef.current?.getBoundingClientRect()
+              ?? { left: 0, top: 0 };
 
             const range = sel.getRangeAt(0);
             const rRect = range.getBoundingClientRect();
 
-            onSelection({
-              cfiRange,
-              text,
-              x: iRect.left + rRect.left + rRect.width / 2,
-              y: iRect.top + rRect.top,
-            });
+            // rRect sıfır olabilir (iOS) — fallback
+            const x = rRect.width > 0
+              ? (iRect.left ?? 0) + rRect.left + rRect.width / 2
+              : window.innerWidth / 2;
+            const y = rRect.height > 0
+              ? (iRect.top ?? 0) + rRect.top
+              : (iRect.top ?? 0) + 80;
+
+            onSelection({ cfiRange, text, x, y });
           }
         );
 
-        // Boş alana tıklanınca seçim temizle —
-        // ama seçim varsa menüyü kapatma (race condition fix)
-        rendition.on(
-          "click",
-          (...args: unknown[]) => {
-            if (!mounted) return;
-            const contents = args[1] as { window: Window } | undefined;
-            const sel = contents?.window?.getSelection();
-            if (!sel || !sel.toString().trim()) {
-              onClearSelection();
-            }
-          }
-        );
-
-        // Pencere/konteyner boyutu değişince rendition'ı yeniden boyutlandır
-        const resizeObserver = new ResizeObserver(() => {
+        rendition.on("click", (...args: unknown[]) => {
           if (!mounted) return;
-          const { w: nw, h: nh } = getDimensions();
-          if (nw > 0 && nh > 0) {
-            renditionRef.current?.resize(nw, nh);
+          const contents = args[1] as { window: Window } | undefined;
+          const sel = contents?.window?.getSelection();
+          if (!sel || !sel.toString().trim()) {
+            onClearSelection();
           }
         });
-        resizeObserver.observe(wrapperRef.current!);
 
-        return () => resizeObserver.disconnect();
+        const ro = new ResizeObserver(() => {
+          if (!mounted) return;
+          const { w: nw, h: nh } = getDimensions();
+          if (nw > 0 && nh > 0) renditionRef.current?.resize(nw, nh);
+        });
+        ro.observe(wrapperRef.current!);
+        return () => ro.disconnect();
       } catch (err) {
         console.error("epubjs error:", err);
-        if (mounted)
-          setError("E-kitap yüklenemedi. Dosya yolunu kontrol edin.");
+        if (mounted) setError("E-kitap yüklenemedi. Dosya yolunu kontrol edin.");
       }
     };
 
     init();
-
     return () => {
       mounted = false;
       bookRef.current?.destroy();
@@ -299,20 +273,25 @@ export function EpubReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epubUrl, initialCfi]);
 
-  // Tema değişimi (yeniden init olmadan)
+  // Tema değişince: açık tüm view'larda stil elementini doğrudan güncelle
   useEffect(() => {
-    renditionRef.current?.themes.select(theme);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    renditionRef.current?.getContents()?.forEach((c: any) => {
+      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(theme, fontSizeRef.current));
+    });
   }, [theme]);
 
-  // Font boyutu değişimi
+  // Font boyutu değişince: aynı yöntem
   useEffect(() => {
-    renditionRef.current?.themes.fontSize(`${fontSize}px`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    renditionRef.current?.getContents()?.forEach((c: any) => {
+      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(themeRef.current, fontSize));
+    });
   }, [fontSize]);
 
   const nextPage = useCallback(() => renditionRef.current?.next(), []);
   const prevPage = useCallback(() => renditionRef.current?.prev(), []);
 
-  // Klavye gezinme
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") nextPage();
@@ -332,10 +311,7 @@ export function EpubReader({
           </p>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Dosyanın{" "}
-            <code
-              className="text-xs px-1 rounded"
-              style={{ background: "var(--bg-surface)" }}
-            >
+            <code className="text-xs px-1 rounded" style={{ background: "var(--bg-surface)" }}>
               public/books/kuran-yolu-meali/
             </code>{" "}
             klasöründe olduğundan emin olun.
@@ -346,20 +322,14 @@ export function EpubReader({
   }
 
   return (
-    // wrapperRef — boyut ölçümü için
     <div ref={wrapperRef} className="flex-1 relative flex flex-col min-h-0">
-      {/* Yükleniyor */}
       {loading && (
         <div
           className="absolute inset-0 flex items-center justify-center z-10"
           style={{ background: "var(--bg-primary)" }}
         >
           <div className="flex flex-col items-center gap-3">
-            <Loader2
-              size={32}
-              className="animate-spin"
-              style={{ color: "var(--accent)" }}
-            />
+            <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               Kitap yükleniyor…
             </p>
@@ -367,14 +337,12 @@ export function EpubReader({
         </div>
       )}
 
-      {/* Önceki sayfa */}
       <button
         onClick={prevPage}
         disabled={atStart}
         className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all disabled:opacity-0"
         style={{
-          background:
-            "color-mix(in srgb, var(--bg-card) 85%, transparent)",
+          background: "color-mix(in srgb, var(--bg-card) 85%, transparent)",
           border: "1px solid var(--border)",
           color: "var(--text-secondary)",
         }}
@@ -383,21 +351,18 @@ export function EpubReader({
         <ChevronLeft size={20} />
       </button>
 
-      {/* Epub içeriği — containerRef */}
       <div
         ref={containerRef}
         className="flex-1 min-h-0 reader-container"
         style={{ background: "var(--bg-primary)" }}
       />
 
-      {/* Sonraki sayfa */}
       <button
         onClick={nextPage}
         disabled={atEnd}
         className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all disabled:opacity-0"
         style={{
-          background:
-            "color-mix(in srgb, var(--bg-card) 85%, transparent)",
+          background: "color-mix(in srgb, var(--bg-card) 85%, transparent)",
           border: "1px solid var(--border)",
           color: "var(--text-secondary)",
         }}

@@ -64,6 +64,7 @@ declare module "epubjs" {
     themes: Themes;
     annotations: Annotations;
     hooks: { content: Hook; [key: string]: Hook };
+    getContents(): Contents[];
     display(target?: string): Promise<void>;
     next(): Promise<void>;
     prev(): Promise<void>;
