@@ -12,6 +12,7 @@ interface Props {
   text: string;
   slug: string;
   onClose: () => void;
+  onHighlightAdd?: (cfiRange: string, color: string) => void;
 }
 
 const COLORS: { value: HighlightColor; bg: string; label: string }[] = [
@@ -21,7 +22,7 @@ const COLORS: { value: HighlightColor; bg: string; label: string }[] = [
   { value: "pink", bg: "#f9a8d4", label: "Pembe" },
 ];
 
-export function SelectionMenu({ position, cfiRange, text, slug, onClose }: Props) {
+export function SelectionMenu({ position, cfiRange, text, slug, onClose, onHighlightAdd }: Props) {
   const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
     STORAGE_KEYS.highlights(slug),
     []
@@ -61,6 +62,7 @@ export function SelectionMenu({ position, cfiRange, text, slug, onClose }: Props
       createdAt: new Date().toISOString(),
     };
     setHighlights((prev) => [...prev, highlight]);
+    onHighlightAdd?.(cfiRange, color);
     onClose();
   };
 

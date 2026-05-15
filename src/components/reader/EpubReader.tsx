@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import type { ReaderTheme } from "@/types/reader";
 
@@ -19,6 +19,7 @@ interface Props {
   onProgress: (cfi: string, percent: number) => void;
   onSelection: (payload: SelectionPayload) => void;
   onClearSelection: () => void;
+  addHighlightRef?: React.MutableRefObject<((cfi: string, color: string) => void) | null>;
 }
 
 const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
@@ -58,6 +59,13 @@ const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
     },
   };
 
+const HIGHLIGHT_COLORS: Record<string, string> = {
+  yellow: "#fde047",
+  green: "#86efac",
+  blue: "#93c5fd",
+  pink: "#f9a8d4",
+};
+
 export function EpubReader({
   epubUrl,
   initialCfi,
@@ -66,6 +74,7 @@ export function EpubReader({
   onProgress,
   onSelection,
   onClearSelection,
+  addHighlightRef,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,6 +119,53 @@ export function EpubReader({
           spread: "none",
         });
         renditionRef.current = rendition;
+
+        // addHighlight fonksiyonunu dışarıya aç
+        if (addHighlightRef) {
+          addHighlightRef.current = (cfi: string, color: string) => {
+            renditionRef.current?.annotations.highlight(
+              cfi,
+              {},
+              undefined,
+              "hl",
+              { fill: HIGHLIGHT_COLORS[color] ?? "#fde047", "fill-opacity": "0.35" }
+            );
+          };
+        }
+
+        // Swipe (mobil sayfa geçişi) — iframe içine listener ekle
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rendition.hooks.content.register((contents: any) => {
+          if (!contents?.document) return;
+          let startX = 0;
+          let startY = 0;
+          contents.document.addEventListener(
+            "touchstart",
+            (e: TouchEvent) => {
+              startX = e.touches[0].clientX;
+              startY = e.touches[0].clientY;
+            },
+            { passive: true }
+          );
+          contents.document.addEventListener(
+            "touchend",
+            (e: TouchEvent) => {
+              const dx = e.changedTouches[0].clientX - startX;
+              const dy = e.changedTouches[0].clientY - startY;
+              const sel = (contents.window as Window)?.getSelection?.();
+              const hasSelection = sel && sel.toString().trim().length > 0;
+              if (
+                !hasSelection &&
+                Math.abs(dx) > 50 &&
+                Math.abs(dx) > Math.abs(dy)
+              ) {
+                if (dx > 0) renditionRef.current?.prev();
+                else renditionRef.current?.next();
+              }
+            },
+            { passive: true }
+          );
+        });
 
         // Temaları kaydet
         (Object.keys(EPUB_THEMES) as ReaderTheme[]).forEach((t) => {

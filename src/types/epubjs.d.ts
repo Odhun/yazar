@@ -43,8 +43,25 @@ declare module "epubjs" {
     document: Document;
   }
 
+  interface Hook {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    register(fn: (contents: any) => void): void;
+  }
+
+  interface Annotations {
+    highlight(
+      cfiRange: string,
+      data?: Record<string, unknown>,
+      cb?: undefined,
+      className?: string,
+      styles?: Record<string, string>
+    ): void;
+  }
+
   interface Rendition {
     themes: Themes;
+    annotations: Annotations;
+    hooks: { content: Hook; [key: string]: Hook };
     display(target?: string): Promise<void>;
     next(): Promise<void>;
     prev(): Promise<void>;

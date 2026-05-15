@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ReaderToolbar } from "./ReaderToolbar";
 import { ProgressBar } from "./ProgressBar";
 import { EpubReader } from "./EpubReader";
@@ -35,6 +35,7 @@ export function ReadPageClient({ book }: Props) {
   const { progress, saveProgress } = useBookProgress(book.slug);
   const [percent, setPercent] = useState(0);
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION);
+  const addHighlightRef = useRef<((cfi: string, color: string) => void) | null>(null);
 
   if (!loaded) {
     return (
@@ -75,6 +76,7 @@ export function ReadPageClient({ book }: Props) {
             setSelection({ visible: true, cfiRange, text, x, y })
           }
           onClearSelection={() => setSelection(EMPTY_SELECTION)}
+          addHighlightRef={addHighlightRef}
         />
 
         {selection.visible && (
@@ -84,6 +86,7 @@ export function ReadPageClient({ book }: Props) {
             text={selection.text}
             slug={book.slug}
             onClose={() => setSelection(EMPTY_SELECTION)}
+            onHighlightAdd={(cfi, color) => addHighlightRef.current?.(cfi, color)}
           />
         )}
       </div>
