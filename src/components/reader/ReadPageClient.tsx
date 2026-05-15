@@ -47,11 +47,14 @@ export function ReadPageClient({ book }: Props) {
   const goToPageRef = useRef<((page: number) => void) | null>(null);
   const goToCfiRef = useRef<((cfi: string) => void) | null>(null);
 
-  // Toolbar badge için highlight sayısı
-  const [highlights] = useLocalStorage<Highlight[]>(
+  const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
     STORAGE_KEYS.highlights(book.slug),
     []
   );
+  const addHighlight = (h: Highlight) =>
+    setHighlights((prev) => [...prev, h]);
+  const deleteHighlight = (id: string) =>
+    setHighlights((prev) => prev.filter((item) => item.id !== id));
 
   if (!loaded) {
     return (
@@ -113,17 +116,18 @@ export function ReadPageClient({ book }: Props) {
             position={{ x: selection.x, y: selection.y }}
             cfiRange={selection.cfiRange}
             text={selection.text}
-            slug={book.slug}
             onClose={() => setSelection(EMPTY_SELECTION)}
+            onSave={addHighlight}
             onHighlightAdd={(cfi, color) => addHighlightRef.current?.(cfi, color)}
           />
         )}
 
         {showNotes && (
           <HighlightsPanel
-            slug={book.slug}
+            highlights={highlights}
             onClose={() => setShowNotes(false)}
             onGoTo={(cfi) => goToCfiRef.current?.(cfi)}
+            onDelete={deleteHighlight}
           />
         )}
       </div>

@@ -1,8 +1,6 @@
 "use client";
 
 import { X, BookOpen } from "lucide-react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { Highlight, HighlightColor } from "@/types/reader";
 
 const COLOR_HEX: Record<HighlightColor, string> = {
@@ -13,20 +11,13 @@ const COLOR_HEX: Record<HighlightColor, string> = {
 };
 
 interface Props {
-  slug: string;
+  highlights: Highlight[];
   onClose: () => void;
   onGoTo: (cfi: string) => void;
+  onDelete: (id: string) => void;
 }
 
-export function HighlightsPanel({ slug, onClose, onGoTo }: Props) {
-  const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
-    STORAGE_KEYS.highlights(slug),
-    []
-  );
-
-  const removeHighlight = (id: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== id));
-  };
+export function HighlightsPanel({ highlights, onClose, onGoTo, onDelete }: Props) {
 
   return (
     <div
@@ -146,7 +137,7 @@ export function HighlightsPanel({ slug, onClose, onGoTo }: Props) {
                     Git
                   </button>
                   <button
-                    onClick={() => removeHighlight(h.id)}
+                    onClick={() => onDelete(h.id)}
                     className="text-xs px-2 py-0.5 rounded transition-colors"
                     style={{
                       background: "var(--bg-surface)",

@@ -2,16 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Highlighter, StickyNote, X } from "lucide-react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { Highlight, HighlightColor } from "@/types/reader";
 
 interface Props {
   position: { x: number; y: number };
   cfiRange: string;
   text: string;
-  slug: string;
   onClose: () => void;
+  onSave: (h: Highlight) => void;
   onHighlightAdd?: (cfiRange: string, color: string) => void;
 }
 
@@ -22,11 +20,7 @@ const COLORS: { value: HighlightColor; bg: string; label: string }[] = [
   { value: "pink", bg: "#f9a8d4", label: "Pembe" },
 ];
 
-export function SelectionMenu({ position, cfiRange, text, slug, onClose, onHighlightAdd }: Props) {
-  const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
-    STORAGE_KEYS.highlights(slug),
-    []
-  );
+export function SelectionMenu({ position, cfiRange, text, onClose, onSave, onHighlightAdd }: Props) {
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
   const [pendingColor, setPendingColor] = useState<HighlightColor>("yellow");
@@ -61,7 +55,7 @@ export function SelectionMenu({ position, cfiRange, text, slug, onClose, onHighl
       color,
       createdAt: new Date().toISOString(),
     };
-    setHighlights((prev) => [...prev, highlight]);
+    onSave(highlight);
     onHighlightAdd?.(cfiRange, color);
     onClose();
   };
