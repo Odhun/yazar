@@ -29,7 +29,7 @@ const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
         color: "#1c1917 !important",
         "font-family": "Georgia, 'Times New Roman', serif",
         "line-height": "1.9",
-        padding: "0 1rem",
+        padding: "0 2rem",
       },
       p: { "margin-bottom": "1em" },
       a: { color: "#7c3aed !important" },
@@ -40,7 +40,7 @@ const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
         color: "#fafaf9 !important",
         "font-family": "Georgia, 'Times New Roman', serif",
         "line-height": "1.9",
-        padding: "0 1rem",
+        padding: "0 2rem",
       },
       p: { "margin-bottom": "1em" },
       a: { color: "#a78bfa !important" },
@@ -51,7 +51,7 @@ const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
         color: "#3c2415 !important",
         "font-family": "Georgia, 'Times New Roman', serif",
         "line-height": "1.9",
-        padding: "0 1rem",
+        padding: "0 2rem",
       },
       p: { "margin-bottom": "1em" },
       a: { color: "#8b5e3c !important" },
@@ -67,6 +67,7 @@ export function EpubReader({
   onSelection,
   onClearSelection,
 }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bookRef = useRef<any>(null);
@@ -77,23 +78,35 @@ export function EpubReader({
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
 
-  // İlklendirme
+  // Konteyner boyutunu al — mobil dahil güvenilir
+  const getDimensions = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return { w: window.innerWidth, h: window.innerHeight - 56 };
+    const rect = el.getBoundingClientRect();
+    return {
+      w: Math.floor(rect.width) || window.innerWidth,
+      h: Math.floor(rect.height) || window.innerHeight - 56,
+    };
+  }, []);
+
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !wrapperRef.current) return;
     let mounted = true;
 
     const init = async () => {
       try {
         const ePub = (await import("epubjs")).default;
-
         if (!mounted) return;
+
+        // Boyutları net al — string '100%' yerine sayı geç
+        const { w, h } = getDimensions();
 
         const book = ePub(epubUrl);
         bookRef.current = book;
 
         const rendition = book.renderTo(containerRef.current!, {
-          width: "100%",
-          height: "100%",
+          width: w,
+          height: h,
           spread: "none",
         });
         renditionRef.current = rendition;
@@ -105,58 +118,95 @@ export function EpubReader({
         rendition.themes.select(theme);
         rendition.themes.fontSize(`${fontSize}px`);
 
-        // Görüntüle
         await rendition.display(initialCfi ?? undefined);
-
-        // Konum takibi
         await book.locations.generate(1024);
 
         if (!mounted) return;
         setLoading(false);
 
-        rendition.on("relocated", (loc: { start: { cfi: string }; atStart: boolean; atEnd: boolean }) => {
-          if (!mounted) return;
-          const cfi = loc.start.cfi;
-          const pct = Math.round(
-            book.locations.percentageFromCfi(cfi) * 100
-          );
-          onProgress(cfi, Math.max(0, Math.min(100, pct)));
-          setAtStart(loc.atStart);
-          setAtEnd(loc.atEnd);
-        });
+        // Konum takibi
+        rendition.on(
+          "relocated",
+          (loc: {
+            start: { cfi: string };
+            atStart: boolean;
+            atEnd: boolean;
+          }) => {
+            if (!mounted) return;
+            const cfi = loc.start.cfi;
+            const pct = Math.round(
+              book.locations.percentageFromCfi(cfi) * 100
+            );
+            onProgress(cfi, Math.max(0, Math.min(100, pct)));
+            setAtStart(loc.atStart);
+            setAtEnd(loc.atEnd);
+          }
+        );
 
         // Metin seçimi
-        rendition.on("selected", (cfiRange: string, contents: { window: Window; document: Document }) => {
+        rendition.on(
+          "selected",
+          (
+            cfiRange: string,
+            contents: { window: Window; document: Document }
+          ) => {
+            if (!mounted) return;
+            const sel = contents.window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const text = sel.toString().trim();
+            if (!text) return;
+
+            const iframe = (
+              contents.document.defaultView as Window | null
+            )?.frameElement as HTMLIFrameElement | null;
+
+            // iframe bulunamazsa containerRef ile fallback
+            const iRect =
+              iframe?.getBoundingClientRect() ??
+              containerRef.current?.getBoundingClientRect() ??
+              { left: 0, top: 0 };
+
+            const range = sel.getRangeAt(0);
+            const rRect = range.getBoundingClientRect();
+
+            onSelection({
+              cfiRange,
+              text,
+              x: iRect.left + rRect.left + rRect.width / 2,
+              y: iRect.top + rRect.top,
+            });
+          }
+        );
+
+        // Boş alana tıklanınca seçim temizle —
+        // ama seçim varsa menüyü kapatma (race condition fix)
+        rendition.on(
+          "click",
+          (...args: unknown[]) => {
+            if (!mounted) return;
+            const contents = args[1] as { window: Window } | undefined;
+            const sel = contents?.window?.getSelection();
+            if (!sel || !sel.toString().trim()) {
+              onClearSelection();
+            }
+          }
+        );
+
+        // Pencere/konteyner boyutu değişince rendition'ı yeniden boyutlandır
+        const resizeObserver = new ResizeObserver(() => {
           if (!mounted) return;
-          const sel = contents.window.getSelection();
-          if (!sel || sel.rangeCount === 0) return;
-          const text = sel.toString().trim();
-          if (!text) return;
-
-          const iframe = (
-            contents.document.defaultView as (Window & typeof globalThis) | null
-          )?.frameElement as HTMLIFrameElement | null;
-          if (!iframe) return;
-
-          const iRect = iframe.getBoundingClientRect();
-          const range = sel.getRangeAt(0);
-          const rRect = range.getBoundingClientRect();
-
-          onSelection({
-            cfiRange,
-            text,
-            x: iRect.left + rRect.left + rRect.width / 2,
-            y: iRect.top + rRect.top,
-          });
+          const { w: nw, h: nh } = getDimensions();
+          if (nw > 0 && nh > 0) {
+            renditionRef.current?.resize(nw, nh);
+          }
         });
+        resizeObserver.observe(wrapperRef.current!);
 
-        // Boş alana tıklayınca seçimi temizle
-        rendition.on("click", () => {
-          if (mounted) onClearSelection();
-        });
+        return () => resizeObserver.disconnect();
       } catch (err) {
         console.error("epubjs error:", err);
-        if (mounted) setError("E-kitap yüklenemedi. Dosya yolunu kontrol edin.");
+        if (mounted)
+          setError("E-kitap yüklenemedi. Dosya yolunu kontrol edin.");
       }
     };
 
@@ -169,7 +219,7 @@ export function EpubReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epubUrl, initialCfi]);
 
-  // Tema değişimi (re-init olmadan)
+  // Tema değişimi (yeniden init olmadan)
   useEffect(() => {
     renditionRef.current?.themes.select(theme);
   }, [theme]);
@@ -179,14 +229,8 @@ export function EpubReader({
     renditionRef.current?.themes.fontSize(`${fontSize}px`);
   }, [fontSize]);
 
-  const nextPage = useCallback(
-    () => renditionRef.current?.next(),
-    []
-  );
-  const prevPage = useCallback(
-    () => renditionRef.current?.prev(),
-    []
-  );
+  const nextPage = useCallback(() => renditionRef.current?.next(), []);
+  const prevPage = useCallback(() => renditionRef.current?.prev(), []);
 
   // Klavye gezinme
   useEffect(() => {
@@ -203,15 +247,15 @@ export function EpubReader({
       <div className="flex-1 flex items-center justify-center p-8 text-center">
         <div>
           <p className="text-4xl mb-4">📚</p>
-          <p
-            className="font-medium mb-2"
-            style={{ color: "var(--text-primary)" }}
-          >
+          <p className="font-medium mb-2" style={{ color: "var(--text-primary)" }}>
             {error}
           </p>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Dosyanın{" "}
-            <code className="text-xs px-1 rounded" style={{ background: "var(--bg-surface)" }}>
+            <code
+              className="text-xs px-1 rounded"
+              style={{ background: "var(--bg-surface)" }}
+            >
               public/books/kuran-yolu-meali/
             </code>{" "}
             klasöründe olduğundan emin olun.
@@ -222,7 +266,8 @@ export function EpubReader({
   }
 
   return (
-    <div className="flex-1 flex relative overflow-hidden">
+    // wrapperRef — boyut ölçümü için
+    <div ref={wrapperRef} className="flex-1 relative flex flex-col min-h-0">
       {/* Yükleniyor */}
       {loading && (
         <div
@@ -242,13 +287,14 @@ export function EpubReader({
         </div>
       )}
 
-      {/* Önceki sayfa butonu */}
+      {/* Önceki sayfa */}
       <button
         onClick={prevPage}
         disabled={atStart}
         className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all disabled:opacity-0"
         style={{
-          background: "color-mix(in srgb, var(--bg-card) 85%, transparent)",
+          background:
+            "color-mix(in srgb, var(--bg-card) 85%, transparent)",
           border: "1px solid var(--border)",
           color: "var(--text-secondary)",
         }}
@@ -257,20 +303,21 @@ export function EpubReader({
         <ChevronLeft size={20} />
       </button>
 
-      {/* Epub container */}
+      {/* Epub içeriği — containerRef */}
       <div
         ref={containerRef}
-        className="flex-1 reader-container"
+        className="flex-1 min-h-0 reader-container"
         style={{ background: "var(--bg-primary)" }}
       />
 
-      {/* Sonraki sayfa butonu */}
+      {/* Sonraki sayfa */}
       <button
         onClick={nextPage}
         disabled={atEnd}
         className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all disabled:opacity-0"
         style={{
-          background: "color-mix(in srgb, var(--bg-card) 85%, transparent)",
+          background:
+            "color-mix(in srgb, var(--bg-card) 85%, transparent)",
           border: "1px solid var(--border)",
           color: "var(--text-secondary)",
         }}

@@ -47,8 +47,8 @@ export function ReadPageClient({ book }: Props) {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
-      style={{ background: "var(--bg-primary)" }}
+      className="flex flex-col overflow-hidden"
+      style={{ height: "100dvh", background: "var(--bg-primary)" }}
     >
       <ReaderToolbar
         theme={settings.theme}
