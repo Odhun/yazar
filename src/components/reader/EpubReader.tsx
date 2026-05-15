@@ -20,6 +20,9 @@ interface Props {
   onSelection: (payload: SelectionPayload) => void;
   onClearSelection: () => void;
   addHighlightRef?: React.MutableRefObject<((cfi: string, color: string) => void) | null>;
+  goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
+  goToCfiRef?: React.MutableRefObject<((cfi: string) => void) | null>;
+  onPageChange?: (current: number, total: number) => void;
 }
 
 const EPUB_THEMES: Record<ReaderTheme, Record<string, Record<string, string>>> =
@@ -75,6 +78,9 @@ export function EpubReader({
   onSelection,
   onClearSelection,
   addHighlightRef,
+  goToPageRef,
+  goToCfiRef,
+  onPageChange,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -180,11 +186,27 @@ export function EpubReader({
         if (!mounted) return;
         setLoading(false);
 
+        const total = book.locations.length();
+        onPageChange?.(1, total);
+
+        if (goToPageRef) {
+          goToPageRef.current = (page: number) => {
+            const idx = Math.max(0, Math.min(page - 1, total - 1));
+            const cfi = bookRef.current?.locations.cfiFromLocation(idx);
+            if (cfi) renditionRef.current?.display(cfi);
+          };
+        }
+        if (goToCfiRef) {
+          goToCfiRef.current = (cfi: string) => {
+            renditionRef.current?.display(cfi);
+          };
+        }
+
         // Konum takibi
         rendition.on(
           "relocated",
           (loc: {
-            start: { cfi: string };
+            start: { cfi: string; location: number };
             atStart: boolean;
             atEnd: boolean;
           }) => {
@@ -196,6 +218,8 @@ export function EpubReader({
             onProgress(cfi, Math.max(0, Math.min(100, pct)));
             setAtStart(loc.atStart);
             setAtEnd(loc.atEnd);
+            const total = book.locations.length();
+            onPageChange?.(loc.start.location + 1, total);
           }
         );
 

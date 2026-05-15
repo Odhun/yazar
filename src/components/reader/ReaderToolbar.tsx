@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Sun, Moon, Sunset, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Sun, Moon, Sunset, Minus, Plus, BookMarked } from "lucide-react";
 import type { ReaderTheme } from "@/types/reader";
 
 interface Props {
@@ -9,8 +9,10 @@ interface Props {
   fontSize: number;
   bookTitle: string;
   bookSlug: string;
+  notesCount: number;
   onThemeChange: (t: ReaderTheme) => void;
   onFontSizeChange: (n: number) => void;
+  onNotesClick: () => void;
 }
 
 const THEMES: { value: ReaderTheme; icon: React.ReactNode; label: string }[] = [
@@ -24,8 +26,10 @@ export function ReaderToolbar({
   fontSize,
   bookTitle,
   bookSlug,
+  notesCount,
   onThemeChange,
   onFontSizeChange,
+  onNotesClick,
 }: Props) {
   return (
     <header
@@ -107,6 +111,24 @@ export function ReaderToolbar({
           <Plus size={14} />
         </button>
       </div>
+
+      {/* Notlar */}
+      <button
+        onClick={onNotesClick}
+        title="Notlar & İşaretliler"
+        className="relative p-1.5 rounded-lg transition-colors"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        <BookMarked size={16} />
+        {notesCount > 0 && (
+          <span
+            className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center font-bold"
+            style={{ background: "var(--accent)", color: "#fff" }}
+          >
+            {notesCount > 9 ? "9+" : notesCount}
+          </span>
+        )}
+      </button>
     </header>
   );
 }

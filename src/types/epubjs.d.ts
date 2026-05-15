@@ -28,7 +28,9 @@ declare module "epubjs" {
     generate(chars: number): Promise<string[]>;
     percentageFromCfi(cfi: string): number;
     cfiFromPercentage(pct: number): string;
+    cfiFromLocation(loc: number): string;
     currentLocation(): Location;
+    length(): number;
   }
 
   interface Themes {
