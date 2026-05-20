@@ -26,6 +26,7 @@ declare module "epubjs" {
 
   interface Locations {
     generate(chars: number): Promise<string[]>;
+    load(locations: string[]): void;
     percentageFromCfi(cfi: string): number;
     cfiFromPercentage(pct: number): string;
     cfiFromLocation(loc: number): string;

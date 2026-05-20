@@ -82,7 +82,8 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-async function getCached(key: string): Promise<ArrayBuffer | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getCached(key: string): Promise<any | null> {
   try {
     const db = await openDB();
     return await new Promise((res) => {
@@ -93,12 +94,13 @@ async function getCached(key: string): Promise<ArrayBuffer | null> {
   } catch { return null; }
 }
 
-async function putCached(key: string, buf: ArrayBuffer): Promise<void> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function putCached(key: string, value: any): Promise<void> {
   try {
     const db = await openDB();
     await new Promise<void>((res) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(buf, key);
+      tx.objectStore(STORE).put(value, key);
       tx.oncomplete = () => res();
       tx.onerror = () => res();
     });
@@ -240,7 +242,19 @@ export function EpubReader({
         });
 
         await rendition.display(initialCfi ?? undefined);
-        await book.locations.generate(1024);
+
+        // Locations cache: generate bir kere yap, sonrasında yükle
+        const locsKey = epubUrl + "|locs";
+        const cachedLocs = await getCached(locsKey);
+        if (cachedLocs && Array.isArray(cachedLocs) && cachedLocs.length > 0) {
+          book.locations.load(cachedLocs);
+        } else {
+          const locs = await book.locations.generate(1024);
+          if (Array.isArray(locs) && locs.length > 0) {
+            putCached(locsKey, locs); // fire-and-forget
+          }
+        }
+
         if (!mounted) return;
         setLoading(false);
 
