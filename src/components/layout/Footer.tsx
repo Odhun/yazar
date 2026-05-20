@@ -27,14 +27,14 @@ export function Footer() {
 
       <p className="mb-1">© {new Date().getFullYear()} {AUTHOR.name}. Tüm hakları saklıdır.</p>
 
-      <p className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         Tasarım ve Geliştirme{" "}
         <a
           href="https://www.odhun.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:underline"
-          style={{ color: "var(--text-muted)" }}
+          className="font-semibold transition-opacity hover:opacity-80"
+          style={{ color: "#8b5cf6", textDecoration: "none" }}
         >
           OdhunSoft
         </a>
