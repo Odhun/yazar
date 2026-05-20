@@ -36,7 +36,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <link rel="apple-touch-icon" href={`${BASE}/books/kuran-yolu-meali/cover.png`} />
+        <link rel="apple-touch-icon" href={`${BASE}/icon-192.png`} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
