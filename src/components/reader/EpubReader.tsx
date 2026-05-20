@@ -222,23 +222,8 @@ export function EpubReader({
             const dy = e.changedTouches[0].clientY - startY;
             const hasSel = win?.getSelection?.()?.toString().trim();
             if (!hasSel && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-              // Optimistic update
-              if (totalPagesRef.current > 0) {
-                if (dx > 0) {
-                  onPageChangeRef.current?.(
-                    Math.max(currentPageRef.current - 1, 1), totalPagesRef.current
-                  );
-                  renditionRef.current?.prev();
-                } else {
-                  onPageChangeRef.current?.(
-                    Math.min(currentPageRef.current + 1, totalPagesRef.current), totalPagesRef.current
-                  );
-                  renditionRef.current?.next();
-                }
-              } else {
-                if (dx > 0) renditionRef.current?.prev();
-                else renditionRef.current?.next();
-              }
+              if (dx > 0) renditionRef.current?.prev();
+              else renditionRef.current?.next();
             }
           }, { passive: true });
         });
@@ -288,17 +273,28 @@ export function EpubReader({
 
         rendition.on(
           "relocated",
-          (loc: { start: { cfi: string }; atStart: boolean; atEnd: boolean }) => {
+          (loc: {
+            start: { cfi: string; location: number };
+            atStart: boolean;
+            atEnd: boolean;
+          }) => {
             if (!mounted) return;
             const cfi = loc.start.cfi;
-            const pctRaw = book.locations.percentageFromCfi(cfi);
+            const pctRaw = book.locations.percentageFromCfi(cfi) ?? 0;
             const pct = Math.round(pctRaw * 100);
             onProgress(cfi, Math.max(0, Math.min(100, pct)));
             setAtStart(loc.atStart);
             setAtEnd(loc.atEnd);
+
             const t = book.locations.length();
-            // Kesin sayfa — optimistic'i düzelt
-            const pg = t > 0 ? Math.max(1, Math.min(t, Math.ceil(pctRaw * t) || 1)) : 1;
+            // loc.start.location: epubjs'in 0-tabanlı doğrudan index'i
+            // Güvenilir; float hesaptan daha kesin
+            const locIdx = loc.start.location;
+            const pg =
+              typeof locIdx === "number" && locIdx >= 0
+                ? Math.min(locIdx + 1, t)
+                : Math.max(1, Math.min(t, Math.round(pctRaw * t) + 1));
+
             currentPageRef.current = pg;
             totalPagesRef.current = t;
             onPageChange?.(pg, t);
@@ -379,26 +375,8 @@ export function EpubReader({
     });
   }, [fontSize]);
 
-  // Optimistic + gerçek navigasyon
-  const nextPage = useCallback(() => {
-    if (totalPagesRef.current > 0) {
-      onPageChangeRef.current?.(
-        Math.min(currentPageRef.current + 1, totalPagesRef.current),
-        totalPagesRef.current
-      );
-    }
-    renditionRef.current?.next();
-  }, []);
-
-  const prevPage = useCallback(() => {
-    if (totalPagesRef.current > 0) {
-      onPageChangeRef.current?.(
-        Math.max(currentPageRef.current - 1, 1),
-        totalPagesRef.current
-      );
-    }
-    renditionRef.current?.prev();
-  }, []);
+  const nextPage = useCallback(() => { renditionRef.current?.next(); }, []);
+  const prevPage = useCallback(() => { renditionRef.current?.prev(); }, []);
 
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
