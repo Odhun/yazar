@@ -1,0 +1,26 @@
+{
+  "name": "Yazar | E-Kitaplar",
+  "short_name": "Yazar",
+  "description": "Yazarın dijital kitap koleksiyonu",
+  "start_url": "/yazar/",
+  "scope": "/yazar/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf9f7",
+  "theme_color": "#7c3aed",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/yazar/books/kuran-yolu-meali/cover.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/yazar/books/kuran-yolu-meali/cover.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
