@@ -23,6 +23,7 @@ interface Props {
   goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
   goToCfiRef?: React.MutableRefObject<((cfi: string) => void) | null>;
   onPageChange?: (current: number, total: number) => void;
+  highlightsRef?: React.MutableRefObject<Array<{ cfi: string; color: string }>>;
 }
 
 const THEME_CSS: Record<ReaderTheme, string> = {
@@ -120,6 +121,7 @@ export function EpubReader({
   goToPageRef,
   goToCfiRef,
   onPageChange,
+  highlightsRef,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -257,6 +259,16 @@ export function EpubReader({
 
         if (!mounted) return;
         setLoading(false);
+
+        // Kaydedilmiş highlight'ları yeni rendition'a uygula
+        highlightsRef?.current?.forEach(({ cfi, color }) => {
+          try {
+            rendition.annotations.highlight(
+              cfi, {}, undefined, "hl",
+              { fill: HIGHLIGHT_COLORS[color] ?? "#fde047", "fill-opacity": "0.35" }
+            );
+          } catch { /* geçersiz CFI — atla */ }
+        });
 
         const total = book.locations.length();
         totalPagesRef.current = total;

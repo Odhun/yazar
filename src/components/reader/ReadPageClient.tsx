@@ -46,11 +46,15 @@ export function ReadPageClient({ book }: Props) {
   const addHighlightRef = useRef<((cfi: string, color: string) => void) | null>(null);
   const goToPageRef = useRef<((page: number) => void) | null>(null);
   const goToCfiRef = useRef<((cfi: string) => void) | null>(null);
+  const highlightsRef = useRef<Array<{ cfi: string; color: string }>>([]);
 
   const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
     STORAGE_KEYS.highlights(book.slug),
     []
   );
+  // Ref her render'da güncel highlights'ı tutar — EpubReader closure'ları okuyabilir
+  highlightsRef.current = highlights;
+
   const addHighlight = (h: Highlight) =>
     setHighlights((prev) => [...prev, h]);
   const deleteHighlight = (id: string) =>
@@ -109,6 +113,7 @@ export function ReadPageClient({ book }: Props) {
           addHighlightRef={addHighlightRef}
           goToPageRef={goToPageRef}
           goToCfiRef={goToCfiRef}
+          highlightsRef={highlightsRef}
         />
 
         {selection.visible && (
