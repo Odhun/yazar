@@ -6,6 +6,8 @@ import { ProgressBar } from "./ProgressBar";
 import { EpubReader } from "./EpubReader";
 import { SelectionMenu } from "./SelectionMenu";
 import { HighlightsPanel } from "./HighlightsPanel";
+import { TocPanel } from "./TocPanel";
+import type { NavItem } from "@/types/reader";
 import { useReaderSettings } from "@/hooks/useReaderSettings";
 import { useBookProgress } from "@/hooks/useBookProgress";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -35,17 +37,20 @@ interface Props {
 }
 
 export function ReadPageClient({ book }: Props) {
-  const { settings, setTheme, setFontSize, loaded } = useReaderSettings();
+  const { settings, setTheme, setFontSize, setFontFamily, loaded } = useReaderSettings();
   const { progress, saveProgress } = useBookProgress(book.slug);
   const [percent, setPercent] = useState(0);
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [showNotes, setShowNotes] = useState(false);
+  const [showToc, setShowToc] = useState(false);
+  const [toc, setToc] = useState<NavItem[]>([]);
 
   const addHighlightRef = useRef<((cfi: string, color: string) => void) | null>(null);
   const goToPageRef = useRef<((page: number) => void) | null>(null);
   const goToCfiRef = useRef<((cfi: string) => void) | null>(null);
+  const goToHrefRef = useRef<((href: string) => void) | null>(null);
   const highlightsRef = useRef<Array<{ cfi: string; color: string }>>([]);
 
   const [highlights, setHighlights] = useLocalStorage<Highlight[]>(
@@ -77,12 +82,16 @@ export function ReadPageClient({ book }: Props) {
       <ReaderToolbar
         theme={settings.theme}
         fontSize={settings.fontSize}
+        fontFamily={settings.fontFamily}
         bookTitle={book.title}
         bookSlug={book.slug}
         notesCount={highlights.length}
+        hasToc={toc.length > 0}
         onThemeChange={setTheme}
         onFontSizeChange={setFontSize}
-        onNotesClick={() => setShowNotes((v) => !v)}
+        onFontFamilyChange={setFontFamily}
+        onNotesClick={() => { setShowNotes((v) => !v); setShowToc(false); }}
+        onTocClick={() => { setShowToc((v) => !v); setShowNotes(false); }}
       />
 
       <ProgressBar
@@ -98,6 +107,7 @@ export function ReadPageClient({ book }: Props) {
           initialCfi={progress?.cfi}
           theme={settings.theme}
           fontSize={settings.fontSize}
+          fontFamily={settings.fontFamily}
           onProgress={(cfi, pct) => {
             saveProgress(cfi, pct);
             setPercent(pct);
@@ -113,6 +123,8 @@ export function ReadPageClient({ book }: Props) {
           addHighlightRef={addHighlightRef}
           goToPageRef={goToPageRef}
           goToCfiRef={goToCfiRef}
+          goToHrefRef={goToHrefRef}
+          onTocLoad={setToc}
           highlightsRef={highlightsRef}
         />
 
@@ -133,6 +145,14 @@ export function ReadPageClient({ book }: Props) {
             onClose={() => setShowNotes(false)}
             onGoTo={(cfi) => goToCfiRef.current?.(cfi)}
             onDelete={deleteHighlight}
+          />
+        )}
+
+        {showToc && (
+          <TocPanel
+            toc={toc}
+            onClose={() => setShowToc(false)}
+            onNavigate={(href) => goToHrefRef.current?.(href)}
           />
         )}
       </div>

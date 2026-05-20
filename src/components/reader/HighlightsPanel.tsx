@@ -1,6 +1,7 @@
 "use client";
 
-import { X, BookOpen } from "lucide-react";
+import { X, BookOpen, Copy, Check } from "lucide-react";
+import { useState } from "react";
 import type { Highlight, HighlightColor } from "@/types/reader";
 
 const COLOR_HEX: Record<HighlightColor, string> = {
@@ -18,6 +19,22 @@ interface Props {
 }
 
 export function HighlightsPanel({ highlights, onClose, onGoTo, onDelete }: Props) {
+  const [copied, setCopied] = useState(false);
+
+  const exportNotes = async () => {
+    const lines = highlights.map((h, i) => {
+      const date = new Date(h.createdAt).toLocaleDateString("tr-TR");
+      const parts = [`${i + 1}. [${h.color}] — ${date}`, `"${h.text}"`];
+      if (h.note) parts.push(`Not: ${h.note}`);
+      return parts.join("\n");
+    });
+    const text = lines.join("\n---\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* eski tarayıcı fallback */ }
+  };
 
   return (
     <div
@@ -52,13 +69,25 @@ export function HighlightsPanel({ highlights, onClose, onGoTo, onDelete }: Props
             </span>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-lg transition-colors"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          {highlights.length > 0 && (
+            <button
+              onClick={exportNotes}
+              title="Notları kopyala"
+              className="p-1 rounded-lg transition-colors"
+              style={{ color: copied ? "var(--accent)" : "var(--text-muted)" }}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg transition-colors"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Liste */}

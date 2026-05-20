@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\hukum\\\\yazarcom\\\\src\\\\app\" -Recurse -Name)"
+    ]
+  }
+}

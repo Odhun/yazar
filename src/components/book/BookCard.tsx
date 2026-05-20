@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { assetUrl } from "@/lib/asset";
+import { STORAGE_KEYS } from "@/lib/storage";
 import type { Book } from "@/types/book";
 
 interface Props {
@@ -9,6 +11,18 @@ interface Props {
 }
 
 export function BookCard({ book }: Props) {
+  const [progressPct, setProgressPct] = useState<number | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.progress(book.slug));
+      if (stored) {
+        const { percent } = JSON.parse(stored) as { percent: number };
+        if (typeof percent === "number" && percent > 0) setProgressPct(percent);
+      }
+    } catch { /* ignore */ }
+  }, [book.slug]);
+
   return (
     <Link href={`/books/${book.slug}`} className="group block">
       <article
@@ -45,6 +59,16 @@ export function BookCard({ book }: Props) {
           />
         </div>
 
+        {/* Okuma ilerlemesi */}
+        {progressPct !== null && (
+          <div className="h-1 w-full" style={{ background: "var(--bg-surface)" }}>
+            <div
+              className="h-full transition-all"
+              style={{ width: `${progressPct}%`, background: "var(--accent)" }}
+            />
+          </div>
+        )}
+
         {/* Bilgi */}
         <div className="p-4">
           <h3
@@ -53,12 +77,16 @@ export function BookCard({ book }: Props) {
           >
             {book.title}
           </h3>
-          <span
-            className="text-xs"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {book.genre} · {book.publishedYear}
-          </span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {book.genre} · {book.publishedYear}
+            </span>
+            {progressPct !== null && (
+              <span className="text-xs font-medium shrink-0" style={{ color: "var(--accent)" }}>
+                %{progressPct}
+              </span>
+            )}
+          </div>
         </div>
       </article>
     </Link>

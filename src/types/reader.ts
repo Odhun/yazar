@@ -1,8 +1,18 @@
 export type ReaderTheme = "light" | "dark" | "sepia";
 
+export type FontFamily = "serif" | "sans";
+
+export interface NavItem {
+  id: string;
+  href: string;
+  label: string;
+  subitems?: NavItem[];
+}
+
 export interface ReaderSettings {
   theme: ReaderTheme;
   fontSize: number;
+  fontFamily: FontFamily;
 }
 
 export interface BookProgress {

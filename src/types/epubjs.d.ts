@@ -79,6 +79,8 @@ declare module "epubjs" {
   interface Book {
     renderTo(element: Element, options?: RenditionOptions): Rendition;
     locations: Locations;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    navigation: { toc: any[] };
     destroy(): void;
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Calendar, Globe, Tag } from "lucide-react";
+import { ArrowLeft, BookOpen, Calendar, Globe, Tag, MessageCircle } from "lucide-react";
 import { assetUrl } from "@/lib/asset";
 import type { Book } from "@/types/book";
 
@@ -93,17 +93,40 @@ export function BookDetail({ book }: Props) {
           </p>
 
           {/* CTA */}
-          <Link
-            href={`/books/${book.slug}/read`}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm transition-colors"
-            style={{
-              background: "var(--accent)",
-              color: "#ffffff",
-            }}
-          >
-            <BookOpen size={18} />
-            Okumaya Başla
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/books/${book.slug}/read`}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm transition-colors"
+              style={{
+                background: "var(--accent)",
+                color: "#ffffff",
+              }}
+            >
+              <BookOpen size={18} />
+              Okumaya Başla
+            </Link>
+
+            <button
+              onClick={() => {
+                const url = window.location.href;
+                const text = `*${book.title}*\n${book.author}\n\n${url}`;
+                window.open(
+                  `https://wa.me/?text=${encodeURIComponent(text)}`,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+              }}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-colors"
+              style={{
+                background: "var(--bg-surface)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <MessageCircle size={16} />
+              WhatsApp&apos;ta Paylaş
+            </button>
+          </div>
         </div>
       </div>
     </div>

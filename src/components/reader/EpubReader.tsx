@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import type { ReaderTheme } from "@/types/reader";
+import type { ReaderTheme, FontFamily, NavItem } from "@/types/reader";
 
 interface SelectionPayload {
   cfiRange: string;
@@ -16,32 +16,40 @@ interface Props {
   initialCfi?: string;
   theme: ReaderTheme;
   fontSize: number;
+  fontFamily: FontFamily;
   onProgress: (cfi: string, percent: number) => void;
   onSelection: (payload: SelectionPayload) => void;
   onClearSelection: () => void;
   addHighlightRef?: React.MutableRefObject<((cfi: string, color: string) => void) | null>;
   goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
   goToCfiRef?: React.MutableRefObject<((cfi: string) => void) | null>;
+  goToHrefRef?: React.MutableRefObject<((href: string) => void) | null>;
   onPageChange?: (current: number, total: number) => void;
+  onTocLoad?: (toc: NavItem[]) => void;
   highlightsRef?: React.MutableRefObject<Array<{ cfi: string; color: string }>>;
 }
 
 const THEME_CSS: Record<ReaderTheme, string> = {
   light: `
     html,body{background:#faf9f7!important;color:#1c1917!important}
-    body{font-family:Georgia,'Times New Roman',serif!important;line-height:1.9!important;padding:0 2rem!important;margin:0!important}
+    body{line-height:1.9!important;padding:0 2rem!important;margin:0!important}
     p{margin-bottom:1em} a{color:#7c3aed!important}
   `,
   dark: `
     html,body{background:#1c1917!important;color:#fafaf9!important}
-    body{font-family:Georgia,'Times New Roman',serif!important;line-height:1.9!important;padding:0 2rem!important;margin:0!important}
+    body{line-height:1.9!important;padding:0 2rem!important;margin:0!important}
     p{margin-bottom:1em} a{color:#a78bfa!important}
   `,
   sepia: `
     html,body{background:#f5f0e8!important;color:#3c2415!important}
-    body{font-family:Georgia,'Times New Roman',serif!important;line-height:1.9!important;padding:0 2rem!important;margin:0!important}
+    body{line-height:1.9!important;padding:0 2rem!important;margin:0!important}
     p{margin-bottom:1em} a{color:#8b5e3c!important}
   `,
+};
+
+const FONT_STACK: Record<FontFamily, string> = {
+  serif: "Georgia,'Times New Roman',serif",
+  sans: "system-ui,-apple-system,'Segoe UI',sans-serif",
 };
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
@@ -51,10 +59,10 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
   pink: "#f9a8d4",
 };
 
-function buildCSS(theme: ReaderTheme, fontSize: number): string {
+function buildCSS(theme: ReaderTheme, fontSize: number, fontFamily: FontFamily): string {
   return [
     THEME_CSS[theme],
-    `body{font-size:${fontSize}px!important}`,
+    `body{font-size:${fontSize}px!important;font-family:${FONT_STACK[fontFamily]}!important}`,
     `*{-webkit-user-select:text!important;user-select:text!important}`,
     `img,video,svg{max-width:100%!important;height:auto!important}`,
   ].join("\n");
@@ -114,13 +122,16 @@ export function EpubReader({
   initialCfi,
   theme,
   fontSize,
+  fontFamily,
   onProgress,
   onSelection,
   onClearSelection,
   addHighlightRef,
   goToPageRef,
   goToCfiRef,
+  goToHrefRef,
   onPageChange,
+  onTocLoad,
   highlightsRef,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -133,12 +144,15 @@ export function EpubReader({
   // Refs — closure'lar her zaman güncel değeri okur
   const themeRef = useRef<ReaderTheme>(theme);
   const fontSizeRef = useRef<number>(fontSize);
+  const fontFamilyRef = useRef<FontFamily>(fontFamily);
   const onPageChangeRef = useRef(onPageChange);
-  // Optimistic page update için
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef(0);
+  const nextPageRef = useRef<() => void>(() => {});
+  const prevPageRef = useRef<() => void>(() => {});
   themeRef.current = theme;
   fontSizeRef.current = fontSize;
+  fontFamilyRef.current = fontFamily;
   onPageChangeRef.current = onPageChange;
 
   const [loading, setLoading] = useState(true);
@@ -159,6 +173,21 @@ export function EpubReader({
   useEffect(() => {
     if (!containerRef.current || !wrapperRef.current) return;
     let mounted = true;
+
+    // Wake Lock — okurken ekran kapanmasın
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let wakeLock: any = null;
+    const acquireWakeLock = async () => {
+      if ("wakeLock" in navigator) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+        } catch { /* İzin reddedildi veya desteklenmiyor */ }
+      }
+    };
+    acquireWakeLock();
+    const onVisibility = () => { if (document.visibilityState === "visible") acquireWakeLock(); };
+    document.addEventListener("visibilitychange", onVisibility);
 
     const init = async () => {
       try {
@@ -209,7 +238,7 @@ export function EpubReader({
           const doc: Document = contents.document;
           const win: Window = contents.window;
 
-          injectStyle(doc, "__ereader__", buildCSS(themeRef.current, fontSizeRef.current));
+          injectStyle(doc, "__ereader__", buildCSS(themeRef.current, fontSizeRef.current, fontFamilyRef.current));
 
           let startX = 0;
           let startY = 0;
@@ -222,11 +251,31 @@ export function EpubReader({
             const dy = e.changedTouches[0].clientY - startY;
             const hasSel = win?.getSelection?.()?.toString().trim();
             if (!hasSel && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-              if (dx > 0) renditionRef.current?.prev();
-              else renditionRef.current?.next();
+              if (dx > 0) prevPageRef.current();
+              else nextPageRef.current();
             }
           }, { passive: true });
         });
+
+        // relocated: sadece progress bar — sayfa sayacına DOKUNMAZ
+        let lastRelocatedCfi = initialCfi ?? '';
+        rendition.on(
+          "relocated",
+          (loc: {
+            start: { cfi: string };
+            atStart: boolean;
+            atEnd: boolean;
+          }) => {
+            if (!mounted) return;
+            const cfi = loc.start.cfi;
+            lastRelocatedCfi = cfi;
+            const pctRaw = book.locations.percentageFromCfi(cfi) ?? 0;
+            const pct = Math.round(pctRaw * 100);
+            onProgress(cfi, Math.max(0, Math.min(100, pct)));
+            setAtStart(loc.atStart);
+            setAtEnd(loc.atEnd);
+          }
+        );
 
         await rendition.display(initialCfi ?? undefined);
 
@@ -258,50 +307,64 @@ export function EpubReader({
         const total = book.locations.length();
         totalPagesRef.current = total;
 
+        // Başlangıç sayfasını lokasyon verisinden hesapla (locations hazır olduktan sonra)
+        if (total > 0 && lastRelocatedCfi) {
+          const pctRaw = book.locations.percentageFromCfi(lastRelocatedCfi) ?? 0;
+          // Progress bar'ı doğru yüzdeyle güncelle (ilk relocated'da locations yoktu)
+          onProgress(lastRelocatedCfi, Math.max(0, Math.min(100, Math.round(pctRaw * 100))));
+          const initialPage = Math.max(1, Math.min(total, Math.round(pctRaw * (total - 1)) + 1));
+          currentPageRef.current = initialPage;
+          onPageChange?.(initialPage, total);
+        } else {
+          onPageChange?.(1, total);
+        }
+
         if (goToPageRef) {
           goToPageRef.current = (page: number) => {
-            const idx = Math.max(0, Math.min(page - 1, total - 1));
+            const t = totalPagesRef.current;
+            const idx = Math.max(0, Math.min(page - 1, t - 1));
             const cfi = bookRef.current?.locations.cfiFromLocation(idx);
-            if (cfi) renditionRef.current?.display(cfi);
+            if (cfi) {
+              currentPageRef.current = page;
+              onPageChangeRef.current?.(page, t);
+              renditionRef.current?.display(cfi);
+            }
           };
         }
         if (goToCfiRef) {
           goToCfiRef.current = (cfi: string) => {
+            const t = totalPagesRef.current;
+            if (t > 0) {
+              const pctRaw = bookRef.current?.locations.percentageFromCfi(cfi) ?? 0;
+              const pg = Math.max(1, Math.min(t, Math.round(pctRaw * (t - 1)) + 1));
+              currentPageRef.current = pg;
+              onPageChangeRef.current?.(pg, t);
+            }
             renditionRef.current?.display(cfi);
           };
         }
 
-        rendition.on(
-          "relocated",
-          (loc: {
-            start: { cfi: string; location: number };
-            atStart: boolean;
-            atEnd: boolean;
-          }) => {
-            if (!mounted) return;
-            const cfi = loc.start.cfi;
-            const pctRaw = book.locations.percentageFromCfi(cfi) ?? 0;
-            const pct = Math.round(pctRaw * 100);
-            onProgress(cfi, Math.max(0, Math.min(100, pct)));
-            setAtStart(loc.atStart);
-            setAtEnd(loc.atEnd);
+        if (goToHrefRef) {
+          goToHrefRef.current = (href: string) => {
+            // Bir sonraki relocated'da sayfa sayacını güncelle
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (renditionRef.current as any)?.once?.("relocated", (loc: { start: { cfi: string } }) => {
+              const t = totalPagesRef.current;
+              if (t > 0) {
+                const pctRaw = bookRef.current?.locations.percentageFromCfi(loc.start.cfi) ?? 0;
+                const pg = Math.max(1, Math.min(t, Math.round(pctRaw * (t - 1)) + 1));
+                currentPageRef.current = pg;
+                onPageChangeRef.current?.(pg, t);
+              }
+            });
+            renditionRef.current?.display(href);
+          };
+        }
 
-            const t = book.locations.length();
-            // loc.start.location: epubjs'in 0-tabanlı doğrudan index'i
-            // Güvenilir; float hesaptan daha kesin
-            const locIdx = loc.start.location;
-            const pg =
-              typeof locIdx === "number" && locIdx >= 0
-                ? Math.min(locIdx + 1, t)
-                : Math.max(1, Math.min(t, Math.round(pctRaw * t) + 1));
-
-            currentPageRef.current = pg;
-            totalPagesRef.current = t;
-            onPageChange?.(pg, t);
-          }
-        );
-
-        onPageChange?.(1, total);
+        // İçindekiler
+        if (onTocLoad && book.navigation?.toc) {
+          onTocLoad(book.navigation.toc);
+        }
 
         rendition.on(
           "selected",
@@ -355,28 +418,57 @@ export function EpubReader({
     init();
     return () => {
       mounted = false;
+      document.removeEventListener("visibilitychange", onVisibility);
+      wakeLock?.release?.();
       bookRef.current?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [epubUrl, initialCfi]);
+  }, [epubUrl]); // initialCfi kasıtlı olarak dışarıda — sadece ilk konuma açmak için kullanılır
 
-  // Tema: açık view'larda stil elementini doğrudan güncelle
+  // Tema / font boyutu / font ailesi değişince açık view'larda stil güncelle
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     renditionRef.current?.getContents()?.forEach((c: any) => {
-      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(theme, fontSizeRef.current));
+      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(theme, fontSizeRef.current, fontFamilyRef.current));
     });
   }, [theme]);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     renditionRef.current?.getContents()?.forEach((c: any) => {
-      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(themeRef.current, fontSize));
+      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(themeRef.current, fontSize, fontFamilyRef.current));
     });
   }, [fontSize]);
 
-  const nextPage = useCallback(() => { renditionRef.current?.next(); }, []);
-  const prevPage = useCallback(() => { renditionRef.current?.prev(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    renditionRef.current?.getContents()?.forEach((c: any) => {
+      if (c?.document) injectStyle(c.document, "__ereader__", buildCSS(themeRef.current, fontSizeRef.current, fontFamily));
+    });
+  }, [fontFamily]);
+
+  const nextPage = useCallback(() => {
+    const total = totalPagesRef.current;
+    if (total > 0) {
+      const newPg = Math.min(currentPageRef.current + 1, total);
+      currentPageRef.current = newPg;
+      onPageChangeRef.current?.(newPg, total);
+    }
+    renditionRef.current?.next();
+  }, []);
+
+  const prevPage = useCallback(() => {
+    const total = totalPagesRef.current;
+    if (total > 0) {
+      const newPg = Math.max(currentPageRef.current - 1, 1);
+      currentPageRef.current = newPg;
+      onPageChangeRef.current?.(newPg, total);
+    }
+    renditionRef.current?.prev();
+  }, []);
+
+  nextPageRef.current = nextPage;
+  prevPageRef.current = prevPage;
 
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {

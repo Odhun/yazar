@@ -3,8 +3,8 @@
 const CACHE = 'yazar-pwa-v1';
 
 const PRECACHE = [
-  '/yazar/',
-  '/yazar/books/kuran-yolu-meali/',
+  '/',
+  '/books/kuran-yolu-meali/',
 ];
 
 self.addEventListener('install', (e) => {

@@ -36,6 +36,13 @@ export function AuthorBio() {
           >
             {AUTHOR.bio}
           </p>
+
+          <p
+            className="text-xs mt-3 max-w-xl"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Kur&apos;an Yolu Meali örnek olarak yüklenmiştir. Site yazara uygun şekilde güncellenecektir.
+          </p>
         </div>
       </div>
     </section>

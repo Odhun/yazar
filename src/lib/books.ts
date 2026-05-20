@@ -5,6 +5,10 @@ export const AUTHOR = {
   name: "Yazar Adı",
   bio: "Burada kısa biyografinizi yazabilirsiniz. Eserleriniz, yolculuğunuz ve okuyucularınıza iletmek istediğiniz mesaj.",
   photo: "/author.png",
+  // İletişim — boş bırakılırsa o bölüm gizlenir
+  email: "", // örn: "ornek@email.com"
+  whatsapp: "", // ülke kodu dahil, örn: "905001234567"
+  instagram: "", // örn: "kullanici_adi"
 };
 
 export const books: Book[] = [

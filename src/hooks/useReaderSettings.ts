@@ -3,11 +3,12 @@
 import { useCallback } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import { STORAGE_KEYS } from "@/lib/storage";
-import type { ReaderSettings, ReaderTheme } from "@/types/reader";
+import type { ReaderSettings, ReaderTheme, FontFamily } from "@/types/reader";
 
 const DEFAULT_SETTINGS: ReaderSettings = {
   theme: "light",
   fontSize: 18,
+  fontFamily: "serif",
 };
 
 export function useReaderSettings() {
@@ -30,5 +31,10 @@ export function useReaderSettings() {
     [setSettings]
   );
 
-  return { settings, setTheme, setFontSize, loaded };
+  const setFontFamily = useCallback(
+    (fontFamily: FontFamily) => setSettings((s) => ({ ...s, fontFamily })),
+    [setSettings]
+  );
+
+  return { settings, setTheme, setFontSize, setFontFamily, loaded };
 }

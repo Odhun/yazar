@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Sun, Moon, Sunset, Minus, Plus, BookMarked } from "lucide-react";
-import type { ReaderTheme } from "@/types/reader";
+import { ArrowLeft, Sun, Moon, Sunset, Minus, Plus, BookMarked, List } from "lucide-react";
+import type { ReaderTheme, FontFamily } from "@/types/reader";
 
 interface Props {
   theme: ReaderTheme;
   fontSize: number;
+  fontFamily: FontFamily;
   bookTitle: string;
   bookSlug: string;
   notesCount: number;
+  hasToc: boolean;
   onThemeChange: (t: ReaderTheme) => void;
   onFontSizeChange: (n: number) => void;
+  onFontFamilyChange: (f: FontFamily) => void;
   onNotesClick: () => void;
+  onTocClick: () => void;
 }
 
 const THEMES: { value: ReaderTheme; icon: React.ReactNode; label: string }[] = [
@@ -24,12 +28,16 @@ const THEMES: { value: ReaderTheme; icon: React.ReactNode; label: string }[] = [
 export function ReaderToolbar({
   theme,
   fontSize,
+  fontFamily,
   bookTitle,
   bookSlug,
   notesCount,
+  hasToc,
   onThemeChange,
   onFontSizeChange,
+  onFontFamilyChange,
   onNotesClick,
+  onTocClick,
 }: Props) {
   return (
     <header
@@ -111,6 +119,34 @@ export function ReaderToolbar({
           <Plus size={14} />
         </button>
       </div>
+
+      {/* Font ailesi */}
+      <button
+        onClick={() => onFontFamilyChange(fontFamily === "serif" ? "sans" : "serif")}
+        title={fontFamily === "serif" ? "Sans-Serif'e geç" : "Serif'e geç"}
+        className="p-1.5 rounded-lg text-xs font-bold transition-colors"
+        style={{
+          color: "var(--text-secondary)",
+          fontFamily: fontFamily === "serif" ? "Georgia,serif" : "system-ui,sans-serif",
+          background: "var(--bg-surface)",
+          minWidth: "28px",
+          textAlign: "center",
+        }}
+      >
+        Aa
+      </button>
+
+      {/* İçindekiler */}
+      {hasToc && (
+        <button
+          onClick={onTocClick}
+          title="İçindekiler"
+          className="p-1.5 rounded-lg transition-colors"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          <List size={16} />
+        </button>
+      )}
 
       {/* Notlar */}
       <button

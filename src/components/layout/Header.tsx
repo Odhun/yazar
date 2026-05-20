@@ -40,15 +40,25 @@ export function Header() {
           <span>KİTAPLAR</span>
         </Link>
 
-        <button
-          onClick={cycleTheme}
-          className="p-2 rounded-lg transition-colors"
-          style={{ color: "var(--text-secondary)" }}
-          title={`Tema: ${theme}`}
-          aria-label="Tema değiştir"
-        >
-          <ThemeIcon theme={theme} />
-        </button>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/iletisim"
+            className="px-3 py-1.5 rounded-lg text-sm transition-colors"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            İletişim
+          </Link>
+
+          <button
+            onClick={cycleTheme}
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: "var(--text-secondary)" }}
+            title={`Tema: ${theme}`}
+            aria-label="Tema değiştir"
+          >
+            <ThemeIcon theme={theme} />
+          </button>
+        </div>
       </div>
     </header>
   );
